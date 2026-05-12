@@ -96,14 +96,16 @@ export default function Review({ status, refreshStatus }) {
     }
   }, [status?.jobId, status?.scanning]);
 
+  // Hide archived candidates entirely from the review queue — once someone
+  // is archived (here or in Polymer) they're out of the active pipeline.
+  const visible = useMemo(() => results.filter((r) => !r.archived), [results]);
   const flagged = useMemo(
-    () => results.filter((r) => r.decision === "ARCHIVE" && !r.archived && !r.overridden),
-    [results]
+    () => visible.filter((r) => r.decision === "ARCHIVE" && !r.overridden),
+    [visible]
   );
-  const archived = useMemo(() => results.filter((r) => r.archived), [results]);
   const kept = useMemo(
-    () => results.filter((r) => r.decision === "KEEP" || r.overridden),
-    [results]
+    () => visible.filter((r) => r.decision === "KEEP" || r.overridden),
+    [visible]
   );
 
   async function archiveOne(id) {
@@ -214,23 +216,6 @@ export default function Review({ status, refreshStatus }) {
       ) : (
         <div className="candidate-list">
           {kept.map((r) => (
-            <Candidate
-              key={r.id}
-              result={r}
-              onArchive={archiveOne}
-              onKeep={keepOne}
-              busy={busy}
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="section-title">Archived — {archived.length}</div>
-      {archived.length === 0 ? (
-        <div className="empty muted">None yet.</div>
-      ) : (
-        <div className="candidate-list">
-          {archived.map((r) => (
             <Candidate
               key={r.id}
               result={r}
