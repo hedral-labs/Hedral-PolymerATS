@@ -4,6 +4,7 @@ import {
   hashPrompt,
   normalizeApplicant,
   screenCandidate,
+  shouldSkipApplication,
   stripOutputSpec,
 } from "./screener.js";
 
@@ -106,7 +107,28 @@ export async function runScan({ jobId, rescreenAll = false, onlyOutdated = false
       const queue = [];
       let droppedNoId = 0;
       let droppedAlready = 0;
+      let droppedArchived = 0;
+      let reconciledArchived = 0;
       for (const app of applications) {
+        // Skip applications already archived/rejected/anonymized in Polymer.
+        const skipCheck = shouldSkipApplication(app);
+        if (skipCheck.skip) {
+          droppedArchived += 1;
+          // If we have a local result for this app, mark it archived so it
+          // moves out of the active review queue and into the archived list.
+          const tentative = normalizeApplicant(app);
+          if (tentative.id) {
+            const existing = getResult(tentative.id);
+            if (existing && !existing.archived) {
+              saveResult(tentative.id, {
+                archived: true,
+                archivedAt: new Date().toISOString(),
+              });
+              reconciledArchived += 1;
+            }
+          }
+          continue;
+        }
         const candidate = normalizeApplicant(app);
         if (!candidate.id) { droppedNoId += 1; continue; }
         const existing = getResult(candidate.id);
@@ -123,8 +145,16 @@ export async function runScan({ jobId, rescreenAll = false, onlyOutdated = false
         queue.push(candidate);
       }
       console.log(
-        `[scan] queued ${queue.length} to screen (skipped: ${droppedAlready} already-screened, ${droppedNoId} missing-id)`
+        `[scan] queued ${queue.length} to screen (skipped: ${droppedAlready} already-screened, ${droppedArchived} archived/anonymized in Polymer, ${droppedNoId} missing-id, reconciled ${reconciledArchived} previously-screened → archived)`
       );
+      pushEvent({
+        type: "queue_built",
+        queued: queue.length,
+        skippedAlreadyScreened: droppedAlready,
+        skippedArchived: droppedArchived,
+        skippedNoId: droppedNoId,
+        reconciledArchived,
+      });
 
       setScanState({
         scanning: true,

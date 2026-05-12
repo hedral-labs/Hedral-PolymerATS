@@ -109,6 +109,51 @@ function pickFrom(...candidates) {
   return null;
 }
 
+// Stages where the candidate is already out of the pipeline — no point
+// re-screening (and Polymer often anonymizes these).
+export function isArchivedStage(stageName) {
+  if (!stageName) return false;
+  const lower = String(stageName).toLowerCase().trim();
+  const exact = new Set([
+    "archived",
+    "archive",
+    "rejected",
+    "disqualified",
+    "withdrawn",
+    "declined",
+    "not a fit",
+    "hired", // also already-out-of-pipeline
+  ]);
+  if (exact.has(lower)) return true;
+  // Patterns like "Rejected - too senior", "Archived (auto)"
+  return /^(rejected|archived|disqualif|withdrawn|declined)\b/.test(lower);
+}
+
+// Polymer anonymizes archived candidates — no name and no email remain.
+export function isAnonymizedApplication(app) {
+  const first = String(app?.candidate_first_name || "").trim();
+  const last = String(app?.candidate_last_name || "").trim();
+  const email = String(app?.candidate_email || "").trim();
+  return !first && !last && !email;
+}
+
+// Returns { skip, reason } if the application should not be screened.
+export function shouldSkipApplication(app) {
+  const stage =
+    app?.hiring_stage_name ||
+    (typeof app?.current_hiring_stage === "string"
+      ? app.current_hiring_stage
+      : app?.current_hiring_stage?.name) ||
+    null;
+  if (isArchivedStage(stage)) {
+    return { skip: true, reason: `stage="${stage}"` };
+  }
+  if (isAnonymizedApplication(app)) {
+    return { skip: true, reason: "anonymized (no name/email)" };
+  }
+  return { skip: false };
+}
+
 export function normalizeApplicant(app) {
   // Polymer's hire API returns applications as a flat object with
   // candidate_* prefixed fields. We also handle a nested `applicant` shape
