@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 
+// Polymer's hire UI uses hash_ids in the path. Fall back to numeric IDs if
+// the result was saved before we started persisting hashes.
+function polymerCandidateUrl(applicant) {
+  const job = applicant.jobHashId || applicant.jobId;
+  const app = applicant.hashId || applicant.id;
+  if (!job || !app) return null;
+  return `https://app.polymer.co/hire/jobs/${job}/applications/${app}`;
+}
+
 function ConfidenceBadge({ value, score }) {
   const cls = `confidence-${value || "low"}`;
   const label = (value || "low").toUpperCase();
@@ -12,7 +21,7 @@ function ConfidenceBadge({ value, score }) {
   );
 }
 
-function Candidate({ result, onArchive, onKeep, busy }) {
+function Candidate({ result, onArchive, onKeep, onPreview, busy }) {
   const a = result.applicant || {};
   return (
     <div className="candidate">
@@ -37,8 +46,21 @@ function Candidate({ result, onArchive, onKeep, busy }) {
           ))}
         </div>
         <div className="candidate-links">
-          {a.resumeUrl && <a href={a.resumeUrl} target="_blank" rel="noreferrer">Resume</a>}
+          {a.resumeUrl && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => onPreview(result)}
+            >
+              Resume
+            </button>
+          )}
           {a.linkedinUrl && <a href={a.linkedinUrl} target="_blank" rel="noreferrer">LinkedIn</a>}
+          {polymerCandidateUrl(a) && (
+            <a href={polymerCandidateUrl(a)} target="_blank" rel="noreferrer">
+              Open in Polymer ↗
+            </a>
+          )}
         </div>
       </div>
       <div className="candidate-actions">
@@ -67,11 +89,107 @@ function Candidate({ result, onArchive, onKeep, busy }) {
   );
 }
 
+function ResumePanel({ result, onClose, onArchive, onKeep, busy }) {
+  const a = result.applicant || {};
+  // Route the PDF through our server so we sidestep any X-Frame-Options
+  // restrictions Polymer might set, and so the browser renders inline.
+  // PDF Open Parameters: hide the thumbnail sidebar (navpanes=0), keep the
+  // top toolbar so the user can zoom/download/print, and fit horizontally
+  // so we don't open at 46% zoom.
+  const src = a.resumeUrl
+    ? `/api/proxy/resume?url=${encodeURIComponent(a.resumeUrl)}#toolbar=1&navpanes=0&view=FitH`
+    : null;
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="preview-overlay" onClick={onClose} />
+      <aside className="preview-panel" role="dialog" aria-label="Resume preview">
+        <header className="preview-head">
+          <div>
+            <h2 className="preview-title">{a.name || "Unknown"}</h2>
+            <div className="muted preview-sub">
+              {a.location || "Unknown location"}
+              {a.email ? ` · ${a.email}` : ""}
+            </div>
+          </div>
+          <button className="btn-ghost preview-close" onClick={onClose} aria-label="Close">×</button>
+        </header>
+
+        <div className="preview-meta">
+          <span className={`flag confidence-${result.confidence || "low"}`}>
+            {(result.confidence || "low").toUpperCase()}
+            {typeof result.score === "number" ? ` · ${result.score}` : ""}
+          </span>
+          <span className={`flag ${result.decision === "ARCHIVE" ? "log-archive" : "log-keep"}`}>
+            {result.decision}
+          </span>
+          {(result.flags || []).map((f) => (
+            <span key={f} className="flag">{f}</span>
+          ))}
+        </div>
+        {result.reason && <div className="preview-reason">{result.reason}</div>}
+
+        <div className="preview-pdf">
+          {src ? (
+            <iframe src={src} title={`${a.name} resume`} />
+          ) : (
+            <div className="empty">No resume attached.</div>
+          )}
+        </div>
+
+        <footer className="preview-foot">
+          {a.linkedinUrl && (
+            <a href={a.linkedinUrl} target="_blank" rel="noreferrer">LinkedIn ↗</a>
+          )}
+          {polymerCandidateUrl(a) && (
+            <a href={polymerCandidateUrl(a)} target="_blank" rel="noreferrer">
+              Open in Polymer ↗
+            </a>
+          )}
+          <div className="actions" style={{ marginLeft: "auto" }}>
+            {!result.archived && (
+              <>
+                <button
+                  className="btn-ghost"
+                  onClick={() => onKeep(result.id)}
+                  disabled={busy}
+                >
+                  Override → Keep
+                </button>
+                <button
+                  className="btn-danger"
+                  onClick={() => onArchive(result.id)}
+                  disabled={busy}
+                >
+                  Archive
+                </button>
+              </>
+            )}
+          </div>
+        </footer>
+      </aside>
+    </>
+  );
+}
+
 export default function Review({ status, refreshStatus }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [previewing, setPreviewing] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -114,6 +232,8 @@ export default function Review({ status, refreshStatus }) {
       await api.archive(id);
       await refresh();
       await refreshStatus();
+      // archived candidates are hidden from the queue → close the preview
+      setPreviewing(null);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -204,6 +324,7 @@ export default function Review({ status, refreshStatus }) {
               result={r}
               onArchive={archiveOne}
               onKeep={keepOne}
+              onPreview={setPreviewing}
               busy={busy}
             />
           ))}
@@ -221,11 +342,27 @@ export default function Review({ status, refreshStatus }) {
               result={r}
               onArchive={archiveOne}
               onKeep={keepOne}
+              onPreview={setPreviewing}
               busy={busy}
             />
           ))}
         </div>
       )}
+
+      {previewing && (() => {
+        // Always use the freshest copy of the result (so the panel reflects
+        // overrides / archived-state updates triggered from inside it).
+        const fresh = results.find((r) => r.id === previewing.id) || previewing;
+        return (
+          <ResumePanel
+            result={fresh}
+            onClose={() => setPreviewing(null)}
+            onArchive={archiveOne}
+            onKeep={keepOne}
+            busy={busy}
+          />
+        );
+      })()}
     </div>
   );
 }

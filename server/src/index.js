@@ -90,6 +90,31 @@ function requireConfigured(res) {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+// Resume preview proxy — re-serves Polymer blob URLs with inline content
+// disposition so the PDF renders in an <iframe> on the Review page.
+// Locked to Polymer's known host to prevent the endpoint being used as an
+// open proxy.
+app.get("/api/proxy/resume", async (req, res) => {
+  const url = String(req.query.url || "");
+  if (!url) return res.status(400).json({ error: "url query param required" });
+  if (!/^https:\/\/app\.polymer\.co\//i.test(url)) {
+    return res.status(400).json({ error: "Only Polymer URLs are allowed" });
+  }
+  try {
+    const upstream = await fetch(url, { redirect: "follow" });
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ error: `upstream ${upstream.status}` });
+    }
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/pdf");
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/status", (_req, res) => {
   const state = getState();
   const settings = getSettings();

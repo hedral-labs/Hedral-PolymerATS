@@ -208,6 +208,7 @@ export async function runScan({ jobId, rescreenAll = false, onlyOutdated = false
             jobId: candidate.jobId || targetJobId,
             applicant: {
               id: candidate.id,
+              hashId: candidate.hashId,
               name: candidate.name,
               email: candidate.email,
               location: candidate.location,
@@ -215,6 +216,7 @@ export async function runScan({ jobId, rescreenAll = false, onlyOutdated = false
               resumeUrl: candidate.resumeUrl,
               appliedAt: candidate.appliedAt,
               status: candidate.status,
+              jobHashId: candidate.jobHashId,
             },
             decision: result.decision,
             confidence: result.confidence,

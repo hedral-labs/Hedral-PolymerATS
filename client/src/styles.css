@@ -396,6 +396,94 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .candidate-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 140px; }
 .candidate-links { display: flex; gap: 14px; margin-top: 10px; font-size: 12.5px; }
 
+/* A button that looks like a link — used for opening the resume preview. */
+.link-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.link-button:hover { text-decoration: underline; background: transparent; }
+
+/* Resume preview slide-out panel */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  animation: fade-in 0.15s ease;
+}
+.preview-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 55vw);
+  background: var(--panel);
+  border-left: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  z-index: 51;
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.4);
+  animation: slide-in 0.2s ease;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.preview-title { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.preview-sub { font-size: 12.5px; margin-top: 2px; }
+.preview-close {
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.preview-close:hover { color: var(--text); }
+.preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 20px 0;
+}
+.preview-reason {
+  padding: 8px 20px 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.preview-pdf {
+  flex: 1;
+  min-height: 0;
+  margin: 0 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.preview-pdf iframe { width: 100%; height: 100%; border: 0; display: block; }
+.preview-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .preview-panel { width: 100vw; }
+}
+
 /* Table */
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); }

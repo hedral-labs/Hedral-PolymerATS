@@ -187,6 +187,7 @@ export function normalizeApplicant(app) {
 
   return {
     id: String(pickFrom(a.id, a.application_id, a.hash_id, nested.id) ?? ""),
+    hashId: pickFrom(a.hash_id) || null,
     name,
     email,
     location,
@@ -194,6 +195,7 @@ export function normalizeApplicant(app) {
     resumeUrl: pickResumeUrl(app),
     appliedAt: pickFrom(a.applied_at, a.created_at, a.createdAt),
     jobId: String(pickFrom(a.job_id, a.job?.id, a.jobId) ?? ""),
+    jobHashId: pickFrom(a.job_hash_id) || null,
     status: pickFrom(
       a.hiring_stage_name,
       typeof a.current_hiring_stage === "string" ? a.current_hiring_stage : a.current_hiring_stage?.name,
